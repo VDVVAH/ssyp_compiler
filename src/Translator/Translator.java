@@ -108,7 +108,10 @@ public class Translator {
                 }
                 instructions.add(new CreateArray(-virtualStack.indexOf(local.name()), -virtualStack.indexOf(local.type()[1])));
             } else if (Arrays.stream(structs).anyMatch(struct -> struct.name().equals(local.type()[0]))) {
-                // TODO: error handling?
+                instructions.add(new CreateStruct(); //TODO: give struct
+            } else {
+                System.out.printf("Type '%s' doesn't exists.\n", local.type()[0]);
+                throw new RuntimeException();
             }
         }
 
