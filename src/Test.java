@@ -1,5 +1,7 @@
 import Parsing.Function;
 import Parsing.Parser;
+import Parsing.Program;
+import Parsing.Struct;
 import Translator.BytecodeFile;
 import Translator.Translator;
 import VM.VM;
@@ -37,14 +39,19 @@ public class Test {
 
         Parser parser = new Parser(tokens);
         Function[] functions = parser.getFunctions();
+        Struct[] structs = parser.getStructs();
         for (Function function : functions) {
             System.out.println(STR."\n\{function.toString()}");
+        }
+
+        for (Struct struct : structs) {
+            System.out.println(STR."\n\{struct.toString()}");
         }
 
         BytecodeFile file = new BytecodeFile("out/bytecode.bc");
         file.init();
 
-        Translator.translate(functions, file);
+        Translator.translate(new Program(functions, structs), file);
 
         file.write();
 
@@ -52,6 +59,6 @@ public class Test {
     }
 
     static void runByteCode(String pathToFile) {
-        VM.main(new String[]{ pathToFile });
+        VM.main(new String[]{pathToFile});
     }
 }

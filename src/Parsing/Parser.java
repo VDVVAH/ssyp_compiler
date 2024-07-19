@@ -6,12 +6,14 @@ import java.util.Optional;
 
 public class Parser {
     final private List<String> tokens;
+
     public Parser(List<String> tokens) {
         this.tokens = tokens;
     }
+
     public String startType = "F";
 
-    public List<String> getFunctionTokens(String func_or_struct_name, List<String> tokens) {
+    public List<String> getScopeTokens(String func_or_struct_name, List<String> tokens) {
         boolean InFunc = false, InDesireFunc = false;
         String prevToken, thisToken;
         int begin = 0, end = 0;
@@ -68,20 +70,19 @@ public class Parser {
         for (int k = 0; k < tokens.size() - 1; k++) {
             thisToken = tokens.get(k);
             nextToken = tokens.get(k + 1);
-            if (thisToken.equals("#") && nextToken.equals(STR."\{startType}_VARS_BEGIN"))
-            {
+            if (thisToken.equals("#") && nextToken.equals(STR."\{startType}_VARS_BEGIN")) {
                 InVars = true;
             } else if (thisToken.equals("#") && nextToken.equals(STR."\{startType}_VARS_END")) {
                 return count;
             } else if (nextToken.equals("@") && InVars) {
                 count++;
             }
-            }
+        }
         return 0;
     }
 
     Variable[] createVarsList(String func_name) {
-        List<String> tokens = getFunctionTokens(func_name, this.tokens);
+        List<String> tokens = getScopeTokens(func_name, this.tokens);
         boolean InVars = false;
         String thisToken, nextToken;
         int count = countOfVars(tokens), index = 0;
@@ -89,8 +90,7 @@ public class Parser {
         for (int k = 0; k < tokens.size() - 1; k++) {
             thisToken = tokens.get(k);
             nextToken = tokens.get(k + 1);
-            if (thisToken.equals("#") && nextToken.equals(STR."\{startType}_VARS_BEGIN"))
-            {
+            if (thisToken.equals("#") && nextToken.equals(STR."\{startType}_VARS_BEGIN")) {
                 InVars = true;
             } else if (thisToken.equals("#") && nextToken.equals(STR."\{startType}_VARS_END")) {
                 return variables;
@@ -109,8 +109,7 @@ public class Parser {
         for (int k = 0; k < tokens.size() - 1; k++) {
             thisToken = tokens.get(k);
             nextToken = tokens.get(k + 1);
-            if (thisToken.equals("#") && nextToken.equals(STR."\{startType}_ARGS_BEGIN"))
-            {
+            if (thisToken.equals("#") && nextToken.equals(STR."\{startType}_ARGS_BEGIN")) {
                 InArgs = true;
             } else if (thisToken.equals("#") && nextToken.equals(STR."\{startType}_ARGS_END")) {
                 return count;
@@ -122,7 +121,7 @@ public class Parser {
     }
 
     Variable[] createArgsList(String func_or_struct_name) {
-        List<String> tokens = getFunctionTokens(func_or_struct_name, this.tokens);
+        List<String> tokens = getScopeTokens(func_or_struct_name, this.tokens);
         int count = countOfArgs(tokens), index = 0;
         String thisToken, nextToken;
         boolean InArgs = false;
@@ -130,8 +129,7 @@ public class Parser {
         for (int k = 0; k < tokens.size() - 1; k++) {
             thisToken = tokens.get(k);
             nextToken = tokens.get(k + 1);
-            if (thisToken.equals("#") && nextToken.equals(STR."\{startType}_ARGS_BEGIN"))
-            {
+            if (thisToken.equals("#") && nextToken.equals(STR."\{startType}_ARGS_BEGIN")) {
                 InArgs = true;
             } else if (thisToken.equals("#") && nextToken.equals(STR."\{startType}_ARGS_END")) {
                 return arguments;
@@ -177,6 +175,10 @@ public class Parser {
             case "ENDWHILE" -> InstructionType.WHILE_END;
             case "BREAK" -> InstructionType.BREAK;
             case "CONTINUE" -> InstructionType.CONTINUE;
+            case "<-" -> InstructionType.STRUCT_ASSIGN;
+            case "->" -> InstructionType.STRUCT_ACCESS;
+            case "FOR" -> InstructionType.FOR;
+            case "ENDFOR" -> InstructionType.FOR_END;
             default -> InstructionType.CALL;
         };
     }
@@ -190,7 +192,7 @@ public class Parser {
     }
 
     Instruction[] createInstructionList(String func_or_struct_name) {
-        List<String> tokens = getFunctionTokens(func_or_struct_name, this.tokens);
+        List<String> tokens = getScopeTokens(func_or_struct_name, this.tokens);
         ArrayList<Either<String, Integer>> args = new ArrayList<>();
         InstructionType instructionType = null;
         int index = 0, count = countOfInstruction(tokens);
@@ -225,6 +227,28 @@ public class Parser {
         return instructions;
     }
 
+    Struct getStruct(String struct_name) {
+        return new Struct(
+                struct_name,
+                createVarsList(struct_name)
+        );
+    }
+
+    ArrayList<String> getDataTypeNames() {
+        ArrayList<String> functionNames = new ArrayList<>();
+        boolean InFunc = false;
+        for (int k = 1; k < this.tokens.size(); k++) {
+            if (this.tokens.get(k - 1).equals("#") && this.tokens.get(k).equals(STR."\{startType}_BEGIN")) {
+                InFunc = true;
+            } else if (this.tokens.get(k - 1).equals("#") && this.tokens.get(k).equals(STR."\{startType}_END")) {
+                InFunc = false;
+            } else if (InFunc && this.tokens.get(k - 1).equals("#") && this.tokens.get(k).equals(STR."\{startType}_NAME")) {
+                functionNames.add(tokens.get(k + 1));
+            }
+        }
+        return functionNames;
+    }
+
     Function getFunction(String func_name) {
         return new Function(
                 func_name,
@@ -234,29 +258,24 @@ public class Parser {
         );
     }
 
-    ArrayList<String> getFunctionNames() {
-        ArrayList<String> functionNames = new ArrayList<>();
-        boolean InFunc = false;
-        for (int k = 1; k < this.tokens.size(); k++) {
-            if (this.tokens.get(k - 1).equals("#") && this.tokens.get(k).equals(STR."\{startType}_BEGIN")) {
-                InFunc = true;
-            }
-            else if (this.tokens.get(k - 1).equals("#") && this.tokens.get(k).equals(STR."\{startType}_END")) {
-                InFunc = false;
-            }
-            else if (InFunc && this.tokens.get(k - 1).equals("#") && this.tokens.get(k).equals(STR."\{startType}_NAME")) {
-                functionNames.add(tokens.get(k + 1));
-            }
-        }
-        return functionNames;
-    }
-
     public Function[] getFunctions() {
-        ArrayList<String> functionNames = getFunctionNames();
+        this.startType = "F";
+        ArrayList<String> functionNames = getDataTypeNames();
         int length = functionNames.size();
         Function[] functions = new Function[length];
         for (int k = 0; k < length; k++) {
             functions[k] = getFunction(functionNames.get(k));
+        }
+        return functions;
+    }
+
+    public Struct[] getStructs() {
+        this.startType = "S";
+        ArrayList<String> structNames = getDataTypeNames();
+        int length = structNames.size();
+        Struct[] functions = new Struct[length];
+        for (int k = 0; k < length; k++) {
+            functions[k] = getStruct(structNames.get(k));
         }
         return functions;
     }

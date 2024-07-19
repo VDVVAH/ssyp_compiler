@@ -1,5 +1,7 @@
 import Parsing.Function;
 import Parsing.Parser;
+import Parsing.Program;
+import Parsing.Struct;
 import Translator.BytecodeFile;
 import Translator.Translator;
 
@@ -15,12 +17,13 @@ public class Main {
         List<String> tokens = Lexer.tokenizeFromFile(args[0]);
         Parser parser = new Parser(tokens);
         Function[] functions = parser.getFunctions();
+        Struct[] structs = parser.getStructs();
 
         // TODO: support different bytecode output
-        BytecodeFile file = new BytecodeFile(args[0] + ".bc");
+        BytecodeFile file = new BytecodeFile(STR."\{args[0]}.bc");
         file.init();
 
-        Translator.translate(functions, file);
+        Translator.translate(new Program(functions, structs), file);
 
         file.write();
     }

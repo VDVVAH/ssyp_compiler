@@ -2,16 +2,13 @@ package Translator;
 
 import Parsing.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.IntStream;
 
 public class Translator {
-    public static void translate(Function[] functions, BytecodeFile file) {
-        for (Function func : functions) {
-            generateFunction(func, file);
+    public static void translate(Program prog, BytecodeFile file) {
+        for (Function func : prog.functions()) {
+            generateFunction(func, prog.structs(), file);
         }
 
         file.add_func("print");
@@ -33,9 +30,13 @@ public class Translator {
         file.add_func("len");
         file.add_instructions(new Extern());
         file.add_instructions(new Return(0));
+
+        file.add_func("range");
+        file.add_instructions(new Extern());
+        file.add_instructions(new Return(0));
     }
 
-    private static void generateFunction(Function func, BytecodeFile file) {
+    private static void generateFunction(Function func, Struct[] structs, BytecodeFile file) {
         ArrayList<String> virtualStack = new ArrayList<>();
         virtualStack.addAll(Arrays.stream(func.arguments()).map(Variable::name).toList());
         virtualStack.addAll(Arrays.stream(func.locals()).map(Variable::name).toList());
@@ -92,7 +93,10 @@ public class Translator {
                     virtualStack.add(STR."#\{local.type()[1]}");
                     lenPos = -(virtualStack.size() - 1);
 
+                    long argIndex = Arrays.stream(func.arguments()).takeWhile(arg -> arg.type()[0].equals("Array") && arg.name().equals(local.type()[1])).count() - 1;
+
                     // get size of args array
+                    instructions.add(new Mov(-(int) argIndex, -(virtualStack.size() + 1)));
                     instructions.add(new Call("len", -virtualStack.size()));
                     instructions.add(new Mov(-virtualStack.size(), lenPos));
                 }
@@ -103,6 +107,8 @@ public class Translator {
                     System.out.println(STR."var \{local.type()[1]} doesn't exists in arguements");
                 }
                 instructions.add(new CreateArray(-virtualStack.indexOf(local.name()), -virtualStack.indexOf(local.type()[1])));
+            } else if (Arrays.stream(structs).anyMatch(struct -> struct.name().equals(local.type()[0]))) {
+                // TODO: error handling?
             }
         }
 
@@ -306,6 +312,7 @@ public class Translator {
                     ));
                 }
             }
+
             case WHILE_BEGIN -> {
                 ins.get(0).flatMap(Either::getLeft).ifPresentOrElse(cmpType -> instructions.add(
                         new Jump(CompareTypes.fromSymbol(cmpType).invert(),
@@ -321,7 +328,7 @@ public class Translator {
                 blocks.add(new Block(instructions.size() - 1, false));
             }
 
-            case WHILE_END -> {
+            case WHILE_END, FOR_END -> {
                 blocks.getLast().end = instructions.size();
                 blocks.getLast().fixWhileJumps(instructions);
                 instructions.add(
@@ -359,6 +366,80 @@ public class Translator {
 
                 assert Block.LastWhile(blocks) != null;
                 Block.LastWhile(blocks).continues.add(instructions.size() - 1);
+            }
+
+            case FOR -> {
+                // Для Optional
+                if (ins.get(0).isPresent()) {
+                    if (ins.get(0).get().getLeft().isEmpty()) {
+                        throw new RuntimeException();
+                    }
+                } else {
+                    throw new RuntimeException();
+                }
+                if (ins.get(1).isPresent()) {
+                    if (ins.get(1).get().getLeft().isPresent()) {
+                        if (!ins.get(1).get().getLeft().get().equals("IN")) {
+                            System.out.println("Отсутствует IN в FOR.");
+                            throw new RuntimeException();
+                        }
+                    } else {
+                        throw new RuntimeException();
+                    }
+                } else {
+                    throw new RuntimeException();
+                }
+                if (!(ins.get(2).isPresent() || ins.get(2).get().getLeft().isPresent())) {
+                    throw new RuntimeException();
+                }
+                // SETЫ
+                String var_name = STR."##\{virtualStack.size()}";
+                if (!virtualStack.contains(var_name)) {
+                    virtualStack.add(var_name);
+                    instructions.add(new Set(
+                                    -virtualStack.indexOf(var_name),
+                                    0
+                            )
+                    );
+                }
+                if (!virtualStack.contains("##ONE")) {
+                    virtualStack.add("##ONE");
+                }
+                instructions.add(new Set(
+                        -virtualStack.indexOf("##ONE"),
+                        1
+                ));
+                String array_length_name = STR."##\{ins.get(2).get().getLeft().get()}_LENGTH";
+                if (!virtualStack.contains(array_length_name)) {
+                    virtualStack.add(array_length_name);
+                }
+
+                instructions.add(new Mov(-virtualStack.indexOf(ins.get(2).get().getLeft().get()), -(virtualStack.size() + 1)));
+                instructions.add(new Call("len", -virtualStack.size()));
+                instructions.add(new Mov(-virtualStack.size(), -virtualStack.indexOf(array_length_name)));
+
+                Collections.addAll(virtualStack, "#", "#");
+                // WHILE + ADD + ARRAY_OUT
+                instructions.add(
+                        new Jump(CompareTypes.GreaterEqual,
+                                -virtualStack.indexOf(var_name),
+                                -virtualStack.indexOf(array_length_name),
+                                Integer.MAX_VALUE
+                        )
+                );
+                blocks.add(new Block(instructions.size() - 1, false));
+                instructions.add(
+                        new ArrayOut(-virtualStack.indexOf(ins.get(2).get().getLeft().get()),
+                                -virtualStack.indexOf(var_name),
+                                -virtualStack.indexOf(ins.get(0).get().getLeft().get())
+                        )
+                );
+                instructions.add(
+                        new Add(-virtualStack.indexOf(var_name),
+                                -virtualStack.indexOf(var_name),
+                                -virtualStack.indexOf("##ONE")
+                        )
+                );
             }
         }
     }
@@ -462,6 +543,26 @@ class Block {
         this.continues = new ArrayList<>();
     }
 
+    static Block LastWhile(ArrayList<Block> blocks) {
+        for (int i = blocks.size() - 1; i > -1; i--) {
+            if (!blocks.get(i).IsIfBlock)
+                return blocks.get(i);
+        }
+
+        assert false;
+        return blocks.getFirst();
+    }
+
+    static Block LastIf(ArrayList<Block> blocks) {
+        for (int i = blocks.size() - 1; i > -1; i--) {
+            if (blocks.get(i).IsIfBlock)
+                return blocks.get(i);
+        }
+
+        assert false;
+        return blocks.getFirst();
+    }
+
     public void fixIfJumps(ArrayList<BytecodeInstruction> instructions) {
         assert this.end != Integer.MAX_VALUE;
         assert this.IsIfBlock;
@@ -535,25 +636,5 @@ class Block {
         } else {
             midJump.add(instructionIndex);
         }
-    }
-
-    static Block LastWhile(ArrayList<Block> blocks) {
-        for (int i = blocks.size() - 1; i > -1; i--) {
-            if (!blocks.get(i).IsIfBlock)
-                return blocks.get(i);
-        }
-
-        assert false;
-        return blocks.getFirst();
-    }
-
-    static Block LastIf(ArrayList<Block> blocks) {
-        for (int i = blocks.size() - 1; i > -1; i--) {
-            if (blocks.get(i).IsIfBlock)
-                return blocks.get(i);
-        }
-
-        assert false;
-        return blocks.getFirst();
     }
 }

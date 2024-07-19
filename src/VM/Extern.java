@@ -10,39 +10,29 @@ public class Extern implements Instruction {
 
         // basic print
         if (runtime.getCurrentFunctionName().equals("print")) {
-            for (int i = 0; ; i--) {
+            int len = -(runtime.stackAt(0) + 1);
+            for (int i = -1; i > len; i--) {
                 int obj = runtime.stackAt(i);
 
-                if (obj == 0) {
-                    System.out.print("\n");
-                    break;
-                } else if (i != 0) {
+                if (i != 0) {
                     System.out.print(", ");
                 }
 
                 System.out.print(obj);
             }
 
+            System.out.print("\n");
+
             runtime.returnWith(0);
             return;
         }
 
         if (runtime.getCurrentFunctionName().equals("print_array")) {
-            for (int i = 0; ; i--) {
-                int key = runtime.stackAt(i);
+            Integer[] array = runtime.getArray(runtime.stackAt(0));
 
-                if (key == 0) {
-                    System.out.print("\n");
-                    break;
-                } else if (i != 0) {
-                    System.out.print(", ");
-                }
+            assert array != null;
 
-                Integer[] obj = runtime.getArray(key);
-
-                System.out.print(Arrays.toString(obj));
-            }
-
+            System.out.println(Arrays.toString(array));
             runtime.returnWith(0);
             return;
         }
@@ -73,6 +63,22 @@ public class Extern implements Instruction {
             assert array != null;
 
             runtime.returnWith(array.length);
+            return;
+        }
+
+        if (runtime.getCurrentFunctionName().equals("range")) {
+            int size, rangeOffset, value;
+
+            size = runtime.stackAt(-1) - runtime.stackAt(0);
+            rangeOffset = runtime.createNewArray(size);
+            value = runtime.stackAt(0);
+
+            for (int k = 0; k < size; k++) {
+                runtime.updateArray(rangeOffset, k, value);
+                value += runtime.stackAt(-2);
+            }
+
+            runtime.returnWith(rangeOffset);
             return;
         }
 
