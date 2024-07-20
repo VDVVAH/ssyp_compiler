@@ -8,7 +8,7 @@ record StapleTokens(List<String> tokens, boolean negative, String varName, int b
 
 public class Preparser {
     private final List<String> tokens;
-    private final String[] keywords = {"=", "+", "-", "*", "/", "[", "]", "(", ")", "{", "}", "."};
+    private final String[] keywords = {"=", "+", "-", "*", "/", "(", ")"};
     protected boolean firstOperand = true;
     protected int last_contains_index = 0;
 
