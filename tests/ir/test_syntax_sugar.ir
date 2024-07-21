@@ -1,0 +1,6 @@
+#F_BEGIN;
+    #F_NAME: main;
+    #F_BODY_BEGIN;
+        ##print (#1) (#2 + #2);
+    #F_BODY_END;
+#F_END;

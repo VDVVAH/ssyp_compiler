@@ -3,13 +3,12 @@ package Parsing;
 import java.util.ArrayList;
 import java.util.List;
 
-record StapleTokens(List<String> tokens, boolean negative, String varName, int begin) {
+record StapleTokens(List<String> tokens, boolean negative, List<String> varName, int begin) {
 }
 
 public class Preparser {
     private final List<String> tokens;
     private final String[] keywords = {"=", "+", "-", "*", "/", "(", ")"};
-    protected boolean firstOperand = true;
     protected int last_contains_index = 0;
 
     public Preparser(List<String> tokens) {
@@ -29,12 +28,13 @@ public class Preparser {
                 }
             }
         }
+        elms.removeIf(String::isEmpty);
         return elms;
     }
 
     StapleTokens getStaplesBlock(List<String> tokens, int from) {
-        tokens = tokens.subList(from + 1, tokens.size());
-        return new StapleTokens(getBlock("(", ")", tokens), tokens.get(from - 1).equals("-"), tokens.get(from + 1), from);
+        return new StapleTokens(getBlock("(", ")", tokens), tokens.get(from - 1).equals("-"),
+                tokens.get(from).equals("#") ? tokens.subList(from, from + 2): List.of(tokens.get(from + 1)), from);
     }
 
     List<String> getBlock(String begin, String end, List<String> tokens) {
@@ -69,9 +69,9 @@ public class Preparser {
         if (stapleTokens.negative()) {
             result.add("#");
             result.add("-");
-            result.add(stapleTokens.varName());
+            result.addAll(stapleTokens.varName());
             result.add("#0");
-            result.add(stapleTokens.varName());
+            result.addAll(stapleTokens.varName());
             result.add(";");
         }
         return result;
@@ -97,8 +97,8 @@ public class Preparser {
             StapleTokens internal_result = getStaplesBlock(tokens, index + 1);
             List<String> arithmetic_internal_result = arithmetic(internal_result);
             result.addAll(arithmetic_internal_result);
+            tokens.addAll(internal_result.begin() + internal_result.tokens().size() + 1, arithmetic_internal_result);
             tokens.subList(internal_result.begin() - 1, internal_result.begin() + internal_result.tokens().size() + 1).clear();
-            tokens.addAll(internal_result.begin() - 1, arithmetic_internal_result);
             last_contains_index -= internal_result.tokens().size() + 2 - arithmetic_internal_result.size();
             index = nextContains("(", tokens);
         }
@@ -173,7 +173,7 @@ public class Preparser {
 
     List<String> substitution(int begin, int end) {
         List<String> tokens = share(this.tokens.subList(begin, end));
-        String instruct_name = tokens.getFirst();
+        String instruct_name = tokens.get(2);
         List<String> ready_instruct = new ArrayList<>();
         int begin_index = 1;
         for (int k = 1; k < tokens.size() - 1; k++) {
@@ -188,19 +188,19 @@ public class Preparser {
 
     public List<String> preparse() {
         boolean InBody = false, InSugar = false;
-        int begin = 0;
+        int begin = 2;
         for (int k = 0; k < tokens.size() - 1; k++) {
             String thisToken = tokens.get(k), nextToken = tokens.get(k + 1);
             if (thisToken.equals("#") && nextToken.equals("F_BODY_BEGIN")) {
                 InBody = true;
             } else if (thisToken.equals("#") && nextToken.equals("F_BODY_END")) {
                 InBody = false;
-            } else if (InBody && thisToken.equals(";") && !nextToken.equals("#")) {
+            } else if (InBody && thisToken.equals(";") && nextToken.equals("#") && tokens.get(k + 2).equals("#")) {
                 begin = k + 1;
                 InSugar = true;
             } else if (InBody && InSugar && nextToken.equals(";")) {
+                tokens.addAll(k + 2, substitution(begin, k + 1));
                 tokens.subList(begin, k + 1).clear();
-                tokens.addAll(begin, substitution(begin, k + 1));
                 InSugar = false;
             }
         }

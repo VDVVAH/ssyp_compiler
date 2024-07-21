@@ -1,7 +1,4 @@
-import Parsing.Function;
-import Parsing.Parser;
-import Parsing.Program;
-import Parsing.Struct;
+import Parsing.*;
 import Translator.BytecodeFile;
 import Translator.Translator;
 import VM.VM;
@@ -9,6 +6,7 @@ import VM.VM;
 import java.io.File;
 import java.util.List;
 import java.util.Objects;
+
 
 interface FileFunction {
     void run(String str);
@@ -36,7 +34,9 @@ public class Test {
 
     static void runIr(String pathToFile) {
         List<String> tokens = Lexer.tokenizeFromFile(pathToFile);
-
+        Preparser preparser = new Preparser(tokens);
+        tokens = preparser.preparse();
+        System.out.println(tokens);
         Parser parser = new Parser(tokens);
         Function[] functions = parser.getFunctions();
         Struct[] structs = parser.getStructs();
